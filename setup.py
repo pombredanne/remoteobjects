@@ -39,11 +39,11 @@ except Exception:
 
 setup(
     name='remoteobjects',
-    version='1.1.1',
+    version='1.2.2',
     description='an Object RESTational Model',
-    author='Six Apart Ltd.',
-    author_email='python@sixapart.com',
-    url='http://github.com/sixapart/remoteobjects',
+    author='SAY Media Ltd.',
+    author_email='python@saymedia.com',
+    url='http://github.com/saymedia/remoteobjects',
 
     long_description=long_description,
     classifiers=[
@@ -61,6 +61,8 @@ setup(
 
     packages=['remoteobjects'],
     provides=['remoteobjects'],
-    requires=['simplejson(>=2.0.0)', 'httplib2(>=0.5.0)'],
-    install_requires=['simplejson>=2.0.0', 'httplib2>=0.5.0'],
+    requires=['simplejson(>=2.0.0)', 'httplib2(>=0.5.0)',
+              'dateutil(>=2.1)'],
+    install_requires=['simplejson>=2.0.0', 'httplib2>=0.5.0',
+                      'python-dateutil>=2.1'],
 )

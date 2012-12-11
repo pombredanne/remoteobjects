@@ -39,6 +39,7 @@ that offers links between `RemoteObject` instances, `Link`.
 """
 
 from datetime import datetime, tzinfo, timedelta
+import dateutil.parser
 import logging
 import time
 import urlparse
@@ -279,6 +280,10 @@ class List(Field):
     def decode(self, value):
         """Decodes the dictionary value (a list of dictionary values) into a
         `DataObject` attribute (a list of `DataObject` attribute values)."""
+        if value is None:
+            if callable(self.default):
+                return self.default()
+            return self.default or None
         return [self.fld.decode(v) for v in value]
 
     def encode(self, value):
@@ -300,6 +305,10 @@ class Dict(List):
         """Decodes the dictionary value (a dictionary with dictionary values
         for values) into a `DataObject` attribute (a dictionary with
         `DataObject` attributes for values)."""
+        if value is None:
+            if callable(self.default):
+                return self.default()
+            return self.default or None
         return dict((k, self.fld.decode(v)) for k, v in value.iteritems())
 
     def encode(self, value):
@@ -309,7 +318,23 @@ class Dict(List):
         return dict((k, self.fld.encode(v)) for k, v in value.iteritems())
 
 
-class Object(Field):
+class AcceptsStringCls(object):
+    """Mixin for fields with a ``cls`` attribute that can either be a
+    ``DataObject`` subclass or a string name of a ``DataObject`` subclass (to
+    allow forward references)."""
+
+    def get_cls(self):
+        cls = self.__dict__['cls']
+        if not callable(cls):
+            cls = remoteobjects.dataobject.find_by_name(cls)
+        return cls
+
+    def set_cls(self, cls):
+        self.__dict__['cls'] = cls
+
+    cls = property(get_cls, set_cls)
+
+class Object(AcceptsStringCls, Field):
 
     """A field representing a nested `DataObject`."""
 
@@ -329,17 +354,6 @@ class Object(Field):
         """
         super(Object, self).__init__(**kwargs)
         self.cls = cls
-
-    def get_cls(self):
-        cls = self.__dict__['cls']
-        if not callable(cls):
-            cls = remoteobjects.dataobject.find_by_name(cls)
-        return cls
-
-    def set_cls(self, cls):
-        self.__dict__['cls'] = cls
-
-    cls = property(get_cls, set_cls)
 
     def decode(self, value):
         """Decodes the dictionary value into an instance of the `DataObject`
@@ -379,23 +393,22 @@ class Datetime(Field):
 
     def __init__(self, dateformat=None, **kwargs):
         super(Datetime, self).__init__(**kwargs)
-        if dateformat is not None:
-            self.dateformat = dateformat
 
     def decode(self, value):
         """Decodes a timestamp string into a `DataObject` attribute (a Python
         `datetime` instance).
 
-        Timestamp strings should be of the format ``YYYY-MM-DDTHH:MM:SSZ``.
-        The resulting `datetime` will have UTC tzinfo.
+        Timestamp strings should be of in valid ISO-8601 format, such as
+        ``YYYY-MM-DDTHH:MM:SSZ``,  The resulting `datetime` will have UTC
+        tzinfo.
         """
         if value is None:
             if callable(self.default):
                 return self.default()
             return self.default
         try:
-            return datetime(*(time.strptime(value, self.dateformat))[0:6],
-                    tzinfo=Datetime.utc)
+            # Use dateutil to handle parsing and TZ conversion
+            return dateutil.parser.parse(value).astimezone(Datetime.utc)
         except (TypeError, ValueError):
             raise TypeError('Value to decode %r is not a valid date time stamp' % (value,))
 
@@ -414,7 +427,7 @@ class Datetime(Field):
         return value.replace(microsecond=0).strftime(self.dateformat)
 
 
-class Link(Property):
+class Link(AcceptsStringCls, Property):
 
     """A `RemoteObject` property representing a link from one `RemoteObject`
     instance to another.

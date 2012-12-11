@@ -61,6 +61,17 @@ class TestDataObjects(unittest.TestCase):
         self.assertEquals(BasicMost.__name__, 'BasicMost',
             "metaclass magic didn't break our class's name")
 
+        bm = BasicMost(name='fred', value=2)
+        bm.api_data = {"name": "fred", "value": 2}
+        bm_dict = bm.to_dict()
+        self.assertEquals({ 'name': 'fred', 'value': 2 }, bm_dict, 'First go-round has proper contents')
+        bm.name = 'tom'
+        bm_dict = bm.to_dict()
+        self.assertEquals({ 'name': 'tom', 'value': 2 }, bm_dict, 'Setting name to another string works')
+        bm.name = None
+        bm_dict = bm.to_dict()
+        self.assertEquals({ 'value': 2 }, bm_dict, 'Setting name to None works, and name is omitted in the dict')
+
     def test_descriptorwise(self):
 
         class BasicMost(self.cls):
@@ -92,6 +103,40 @@ class TestDataObjects(unittest.TestCase):
         self.assertEquals(w.when, datetime(2008, 12, 31, 4, 0, 1,
             tzinfo=fields.Datetime.utc),
             'Typething got something like the right when')
+
+        w = WithTypes.from_dict({
+            'name': 'bar',
+            'value': 99,
+            'when': '2012-08-17T14:49:50-05:00'
+        })
+
+        self.assertEquals(w.when, datetime(2012, 8, 17, 19, 49, 50,
+            tzinfo=fields.Datetime.utc),
+            'Non-UTC timezone was parsed and converted to UTC')
+
+        w = WithTypes.from_dict({
+            'when': '2012-13-01T24:01:01-05:00'
+        })
+
+        try:
+            w.when
+            self.fail('No TypeError parsing invalid, well-formatted timestamp')
+        except TypeError:
+            pass
+        except Exception:
+            self.fail('No TypeError parsing invalid, well-formatted timestamp')
+
+        w = WithTypes.from_dict({
+            'when': 'pack my bag with six dozen liquor jugs'
+        })
+
+        try:
+            w.when
+            self.fail('No TypeError parsing malformatted timestamp')
+        except TypeError:
+            pass
+        except Exception:
+            self.fail('No TypeError parsing malformatted timestamp')
 
         w = WithTypes(name='hi', value=99, when=datetime(2009, 2, 3, 10, 44, 0, tzinfo=None)).to_dict()
         self.assert_(w, 'to_dict() returned something True')
@@ -251,6 +296,27 @@ class TestDataObjects(unittest.TestCase):
                 { 'name': 'conway' },
             ],
         }, 'Parentish dict has proper contents')
+
+        p = Parentish.from_dict({
+            'name': 'the parent',
+            'children': None
+        })
+
+        self.assertEquals(p.children, None)
+
+    def test_complex_dict(self):
+
+        class Thing(self.cls):
+            name     = fields.Field()
+            attributes = fields.Dict(fields.Field())
+
+        t = Thing.from_dict({
+            'name': 'the thing',
+            'attributes': None,
+        })
+
+        self.assertEquals(t.attributes, None)
+
 
     def test_self_reference(self):
 
@@ -445,6 +511,16 @@ class TestDataObjects(unittest.TestCase):
         x.link = Frob()
         # Links don't serialize... for now anyways.
         self.assertEquals(x.to_dict(), {})
+
+    def test_forwards_link(self):
+        class Foo(dataobject.DataObject):
+            link = fields.Link('Bar')
+
+        class Bar(dataobject.DataObject):
+            thing = fields.Field()
+
+        # The string class name should be converted to the class
+        self.assertEquals(Foo.__dict__["link"].cls, Bar)
 
     def test_field_datetime(self):
 
